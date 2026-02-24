@@ -10,6 +10,9 @@ const movieList = document.getElementById("movieList");
 let movies = [];
 let nextId = 1;
 
+// Guardamos qué película está seleccionada (para los botones grandes)
+let selectedId = null;
+
 function renderMovies() {
   movieList.innerHTML = "";
 
@@ -18,9 +21,14 @@ function renderMovies() {
     li.className = "item";
     li.dataset.id = String(m.id);
 
-  li.innerHTML = `
+    // Marcar visualmente la selección
+    if (m.id === selectedId) {
+      li.classList.add("selected");
+    }
+
+    li.innerHTML = `
       <div>
-        <strong>${m.title}</strong>
+        <strong>${escapeHtml(m.title)}</strong>
         <span class="badge">${m.year}</span>
       </div>
       <div class="actions">
@@ -29,26 +37,39 @@ function renderMovies() {
       </div>
     `;
 
-
     movieList.appendChild(li);
   }
 }
 
+// (Opcional pero recomendable) evita que se rompa el HTML si alguien mete "<" o "&"
+function escapeHtml(str) {
+  return str
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
+}
+
 function addMovie() {
   const title = titleInput.value.trim();
-  const year = parseInt(yearInput.value, 10);
+  const year = Number(yearInput.value);
 
-  if (!title || Number.isNaN(year)) {
-    alert("Introduce título y año.");
+  if (!title || Number.isNaN(year) || year <= 0) {
+    alert("Introduce un título y un año válido.");
     return;
   }
 
-  movies.push({ id: nextId++, title, year });
+  const newMovie = { id: nextId++, title, year };
+  movies.push(newMovie);
+
+  // Al añadir, seleccionamos la nueva (opcional, pero útil)
+  selectedId = newMovie.id;
+
   titleInput.value = "";
   yearInput.value = "";
   renderMovies();
 }
-``
 
 function editMovieById(id) {
   const movie = movies.find(m => m.id === id);
@@ -62,7 +83,7 @@ function editMovieById(id) {
 
   const newYear = Number(newYearStr);
 
-  if (!newTitle.trim() || !newYear) {
+  if (!newTitle.trim() || Number.isNaN(newYear) || newYear <= 0) {
     alert("Datos no válidos.");
     return;
   }
@@ -72,44 +93,80 @@ function editMovieById(id) {
   renderMovies();
 }
 
-movieList.addEventListener("click", (e) => {
-  const btn = e.target.closest("button");
-  if (!btn) return;
-
-  const li = e.target.closest("li.item");
-  if (!li) return;
-
-  const id = Number(li.dataset.id);
-
-  if (btn.dataset.action === "edit") {
-    editMovieById(id);
-  }
-});
-
 function deleteMovieById(id) {
   movies = movies.filter(m => m.id !== id);
+
+  // Si borramos la seleccionada, quitamos selección
+  if (selectedId === id) selectedId = null;
+
   renderMovies();
 }
 
-// Solo funciona añadir al inicio
+// ----------------------
+// Eventos
+// ----------------------
+
+// Botón grande: Añadir
 addBtn.addEventListener("click", addMovie);
 
-// Estos eventos se completarán en ramas
-deleteBtn.addEventListener("click", () => alert("Se implementa en rama eliminar"));
-editBtn.addEventListener("click", () => alert("Se implementa en rama editar"));
+// Botón grande: Editar (sobre selección)
+editBtn.addEventListener("click", () => {
+  if (selectedId === null) {
+    alert("Selecciona una película de la lista para editar.");
+    return;
+  }
+  editMovieById(selectedId);
+});
 
+// Botón grande: Eliminar (sobre selección)
+deleteBtn.addEventListener("click", () => {
+  if (selectedId === null) {
+    alert("Selecciona una película de la lista para eliminar.");
+    return;
+  }
+  const movie = movies.find(m => m.id === selectedId);
+  const ok = confirm(`¿Eliminar "${movie?.title ?? "película"}"?`);
+  if (!ok) return;
+
+  deleteMovieById(selectedId);
+});
+
+// Click en la lista:
+// - Si pinchas en un item: selecciona
+// - Si pinchas en botones pequeños: ejecuta acción
 movieList.addEventListener("click", (e) => {
-  const btn = e.target.closest("button");
-  if (!btn) return;
-
   const li = e.target.closest("li.item");
   if (!li) return;
 
   const id = Number(li.dataset.id);
+  if (Number.isNaN(id)) return;
 
-  if (btn.dataset.action === "delete") {
-    deleteMovieById(id);
+  // Si se pulsa un botón dentro del li
+  const btn = e.target.closest("button[data-action]");
+  if (btn) {
+    const action = btn.dataset.action;
+
+    if (action === "edit") {
+      selectedId = id;
+      renderMovies();
+      editMovieById(id);
+      return;
+    }
+
+    if (action === "delete") {
+      const movie = movies.find(m => m.id === id);
+      const ok = confirm(`¿Eliminar "${movie?.title ?? "película"}"?`);
+      if (!ok) return;
+
+      deleteMovieById(id);
+      return;
+    }
   }
+
+  // Si no era botón, era click normal: seleccionar
+  selectedId = id;
+  renderMovies();
 });
 
+// Render inicial
 renderMovies();
